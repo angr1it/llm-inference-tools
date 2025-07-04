@@ -1,112 +1,104 @@
-## Функциональные требования
+## Functional Requirements
 
-### 1. Модель и инференс
+### 1. Model and inference
 
-* Загрузка модели **Qwen 3 8B Reasoning** (из HuggingFace), конфигурируемой через `.env`.
-* Поддержка форматов: FP16, GGUF, ONNX.
-* Два режима инференса:
+* Load **Qwen 3 8B Reasoning** from HuggingFace with configuration through `.env`.
+* Supported formats: FP16, GGUF, ONNX.
+* Two inference modes:
+  * **llama.cpp** (default) with quantisation, `--lora`, `n_gpu_layers` and memory mapping.
+  * **ONNX Runtime GenAI** with INT8/INT4 support, CUDA Execution Provider and the `generate()` API.
+* Switching runtimes via environment variables.
+* Support for contexts beyond 32k (YaRN / rope-scaling).
 
-  * **llama.cpp** (по умолчанию): GGUF, квантизация, поддержка `--lora`, `n_gpu_layers`, `mmap`.
-  * **ONNX Runtime GenAI**: поддержка INT8/INT4, CUDA Execution Provider, `generate()` API.
-* Возможность переключения между рантаймами через переменные окружения.
-* Поддержка контекста >32k (YaRN / rope-scaling).
+### 2. Fine-tuning
 
-### 2. Fine-tuning / дообучение
+* LoRA fine-tuning support:
+  * llama.cpp built-in `finetune` → `.gguf` adapter
+  * `peft + transformers` → export to ONNX
+* Quantisation-aware training.
+* Adapter management with `--lora` or the `LORA_PATHS` variable; dynamic loading.
+* Works on CPU and GPU.
 
-* Поддержка LoRA fine-tuning:
+### 3. Chat interface: LangChain Agent Chat UI
 
-  * llama.cpp встроенный `finetune` → `.gguf`
-  * `peft + transformers` → ONNX export
-* Возможность квантизации (quantization-aware training).
-* Управление адаптерами: `--lora`, переменная `LORA_PATHS`, динамическая подгрузка.
-* Поддержка CPU и GPU.
+* Web interface similar to ChatGPT.
+* Multi-role chat (User, Assistant, Tools).
+* Chain-of-Thought, streaming tokens and history logging.
+* Function and tool support.
+* Compatible with the OpenAI API (`/v1/chat/completions`).
 
-### 3. Чат-интерфейс: LangChain Agent Chat UI
+### 4. RLHF / Feedback / Metrics
 
-* Веб-интерфейс в стиле ChatGPT.
-* Мультиролевой чат (User, Assistant, Tools).
-* Chain-of-Thought, потоковые токены, логирование истории.
-* Поддержка функций и "tools".
-* Интеграция с OpenAI API интерфейсом (`/v1/chat/completions`).
+* Logging in JSONL format.
+* Integration with:
+  * **Langfuse** for tracing, rating and dataset export.
+  * **Label Studio** with a pairwise ranking template.
+* Annotation options (thumbs, rating scale).
+* Dataset preparation for DPO, TRLx, PPO.
+* Ability to export logs through the UI.
 
-### 4. RLHF / Feedback / Метрики
+### 5. API and server
 
-* Логирование в формате JSONL.
-* Интеграция с:
-
-  * **Langfuse**: трассировка, рейтинг, экспорт датасетов.
-  * **Label Studio**: шаблон pairwise ranking.
-* Возможность аннотаций (thumbs, шкала оценок).
-* Подготовка датасетов для DPO, TRLx, PPO.
-* Возможность экспорта логов через интерфейс UI.
-
-### 5. API и серверная часть
-
-* FastAPI-интерфейс:
-
+* FastAPI interface with:
   * SSE (`stream=true`)
-  * Авторизация по токену (`Authorization: Bearer`)
+  * Token-based auth (`Authorization: Bearer`)
   * MCP-compatible `tool_calls`
-* Возможность REST-интеграции с внешними сервисами (включая LangChain, Langfuse).
+* REST integration with external services (including LangChain and Langfuse).
 
-### 6. MCP интеграция
+### 6. MCP integration
 
-* Поддержка MCP SDK (Python).
-* MCP endpoint доступен как внутренний сервис или в виде callback внутри LangChain Agent.
-* Возможность подключения внешних MCP-инструментов в UI.
+* Support for the MCP SDK (Python).
+* MCP endpoint available as an internal service or a callback inside the LangChain Agent.
+* Option to connect external MCP tools in the UI.
 
 ---
 
-## ⚙️ Технические требования
+## ⚙️ Technical Requirements
 
-### .env и переменные конфигурации
+### .env and configuration variables
 
-* `MODEL_PATH` — путь к модели (HF или локально)
+* `MODEL_PATH` — path to the model (HF or local)
 * `RUNTIME_BACKEND=llama.cpp|onnx`
 * `LORA_PATHS=/models/lora/*.gguf`
 * `OPENAI_API_BASE_URL=http://llm:8000/v1`
 * `LANGFUSE_API_KEY=...`
 
-### Контейнеризация
+### Containerisation
 
-* Docker образ на `nvidia/cuda:12.x` базе:
-
+* Docker image based on `nvidia/cuda:12.x` with:
   * `llama-cpp-python[server]`
   * `onnxruntime-gpu`, `optimum`, `transformers`, `peft`
   * `fastapi`, `uvicorn`, `langchain`
-* `docker-compose` с GPU пробросом:
-
+* `docker-compose` with GPU passthrough:
   * volumes: `/models`, `/logs`
-  * сервисы: `llm`, `chat-ui`, `langfuse`, `labelstudio`
+  * services: `llm`, `chat-ui`, `langfuse`, `labelstudio`
 
-### Ресурсы
+### Resources
 
-* CPU с AVX2 (лучше AVX-VNNI/AMX)
+* CPU with AVX2 (preferably AVX-VNNI/AMX)
 * GPU ≥ 6 GB VRAM
-* RAM ≥ 16 GB (для моделей >7B)
+* RAM ≥ 16 GB for models larger than 7B
 
 ---
 
-## 🧪 Дополнительно
+## 🧪 Extras
 
-* VS Code расширения: **Continue.dev**, **CodeGPT** с поддержкой OpenAI-compatible API.
-* Метрики: интеграция с Prometheus / Grafana, логирование GPU/CPU (`nvidia-smi`, `docker stats`).
-* Горячая перезагрузка модели и LoRA адаптеров без остановки сервиса.
-
----
-
-## 🧱 Архитектура и компоненты
-
-| Компонент     | Назначение                                              |
-| ------------- | ------------------------------------------------------- |
-| `llm`         | сервер инференса (llama.cpp / onnxruntime) с OpenAI API |
-| `chat-ui`     | LangChain Agent Chat UI для взаимодействия с моделью    |
-| `langfuse`    | трассировка диалогов, сбор оценок, RLHF подготовка      |
-| `labelstudio` | аннотация pairwise диалогов для reward моделей          |
-| `mcp`         | MCP-инструменты и endpoint для подключения к агенту     |
-| `peft-tools`  | скрипты дообучения LoRA и квантизации                   |
-| `vs-code-ext` | клиент внутри IDE с поддержкой модели                   |
-
-Если нужно, каждый из этих компонентов разворачивается в рамках одного `docker-compose`.
+* VS Code extensions: **Continue.dev**, **CodeGPT** with an OpenAI-compatible API.
+* Metrics: integration with Prometheus / Grafana, log GPU/CPU usage (`nvidia-smi`, `docker stats`).
+* Hot reload of the model and LoRA adapters without stopping the service.
 
 ---
+
+## 🧱 Architecture and Components
+
+| Component | Purpose |
+| --------- | ------- |
+| `llm` | inference server (llama.cpp / onnxruntime) with OpenAI API |
+| `chat-ui` | LangChain Agent Chat UI for interacting with the model |
+| `langfuse` | conversation tracing, scoring and RLHF preparation |
+| `labelstudio` | pairwise dialog annotation for reward models |
+| `mcp` | MCP tools and an endpoint for connecting to the agent |
+| `peft-tools` | scripts for LoRA training and quantisation |
+| `vs-code-ext` | IDE client with model support |
+
+Each of these components can be launched as part of a single `docker-compose` stack if needed.

@@ -1,79 +1,78 @@
-# Документация по фиче: [Название фичи]
+# Feature Documentation: [Feature Name]
 
 ---
 
-## 1. Контекст до внедрения фичи
-
-Опиши текущее состояние системы до реализации. Укажи:
-- Как работает существующая логика, связанная с будущей фичей.
-- В чём ограничения или боль для пользователя / системы.
-- Кто затронут (пользователи, роли, микросервисы).
-
----
-
-## 2. Цель фичи
-
-- Какая **проблема** решается?
-- Какова **цель** внедрения (что должно измениться)?
-- Укажи **критерии успеха** — как понять, что фича работает (в цифрах, сценариях).
+## 1. Context before the feature
+Describe the current state of the system before implementation. Include:
+- How the existing logic works that relates to this feature.
+- What limitations or pain points users or the system face.
+- Who is affected (users, roles, microservices).
 
 ---
 
-## 3. Решение
-
-### 3.1 Что входит в фичу (Scope)
-Опиши, какие изменения планируются: новые фичи, экраны, API и т.п.
-
-### 3.2 Что не входит (Out-of-scope)
-Укажи, что **не будет делаться**, даже если это кажется логичным расширением.
-
-### 3.3 Как это должно работать
-- Примеры API-запросов/ответов
-- Скриншоты, диаграммы, схемы
-- Краткое описание UX-потока (если есть)
-
-### 3.4 Архитектурные изменения
-- Какие модули, сервисы, базы данных будут затронуты.
-- Нужно ли вносить изменения в схемы, шины, очереди, конфиги.
+## 2. Feature goal
+- What **problem** does this solve?
+- What is the **goal** (what should change)?
+- Provide **success criteria**—how to know the feature works (numbers, scenarios).
 
 ---
 
-## 4. План реализации
+## 3. Solution
 
-Поэтапное перечисление задач и пояснения к ним.
+### 3.1 Scope
+Describe what will be added or changed: new features, screens, APIs, etc.
 
-## 5. Какие файлы нужно изменить
+### 3.2 Out-of-scope
+State what **will not** be done even if it seems like a logical extension.
 
-Перечисли, какие файлы будут затронуты и как:
-- `src/.../feature.ts` — **update**: новая логика
-- `api/.../routes.ts` — **add**: новый эндпоинт
-- `docs/.../spec.md` — **update**: описание API
-- `db/migrations/xxxx.sql` — **add**: новая колонка
+### 3.3 How it should work
+- API request/response examples
+- Screenshots, diagrams, or flow descriptions
+- Short UX flow description if relevant
 
----
-
-## 6. Потенциальные риски
-
-Опиши риски и как с ними справляться:
-| Риск | Вероятность | Влияние | План |
-|------|-------------|----------|------|
-| Пример: потеря данных | Средняя | Высокое | Сделать backup перед миграцией |
+### 3.4 Architectural changes
+- Which modules, services, or databases will be affected.
+- Whether schemas, buses, queues or configs must change.
 
 ---
 
-## 7. План тестирования
+## 4. Implementation plan
 
-### 7.1 Unit-тесты
-Что и где будет покрыто юнит-тестами?
+List the tasks step by step with explanations.
 
-### 7.2 Интеграционные тесты
-Какие модули или сервисы проверяются вместе?
+## 5. Files to change
 
-### 7.3 Приёмочные сценарии
-Опиши пошагово, как вручную проверить фичу (или используй Gherkin):
+List which files will be touched and how:
+- `src/.../feature.ts` — **update**: new logic
+- `api/.../routes.ts` — **add**: new endpoint
+- `docs/.../spec.md` — **update**: API description
+- `db/migrations/xxxx.sql` — **add**: new column
+
+---
+
+## 6. Potential risks
+
+Describe risks and how to mitigate them:
+| Risk | Probability | Impact | Plan |
+|------|-------------|--------|------|
+| Example: data loss | Medium | High | Make a backup before migration |
+
+---
+
+## 7. Testing plan
+
+### 7.1 Unit tests
+What will be covered by unit tests?
+
+### 7.2 Integration tests
+Which modules or services are tested together?
+
+### 7.3 Acceptance scenarios
+Describe step by step how to verify the feature manually (or use Gherkin):
 
 ```gherkin
-Scenario: Пользователь оформляет заказ с несколькими товарами
+Scenario: User places an order with multiple items
 Given ...
 When ...
 Then ...
+```
