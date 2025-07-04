@@ -1,0 +1,63 @@
+version: "3.9"
+services:
+  llm:
+    build:
+      context: .
+      dockerfile: Dockerfile.llm
+    volumes:
+      - ./models:/models
+      - ./logs:/logs
+    environment:
+      - MODEL_PATH=/models
+      - RUNTIME_BACKEND=${RUNTIME_BACKEND:-llama.cpp}
+      - MODEL_CACHE=/models/cache
+      - LORA_PATHS=${LORA_PATHS:-}
+      - QUANTIZE=${QUANTIZE:-}
+    ports:
+      - "8000:8000"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: [gpu]
+
+  chat-ui:
+    build:
+      context: .
+      dockerfile: Dockerfile.chat-ui
+    ports:
+      - "3000:8080"
+    environment:
+      - OPENAI_API_BASE_URL=http://llm:8000/v1
+    depends_on:
+      - llm
+
+  langfuse:
+    image: ghcr.io/langfuse/langfuse:latest
+    environment:
+      - DATABASE_URL=postgresql://langfuse:langfuse@db/langfuse
+    ports:
+      - "3001:3000"
+    depends_on:
+      - db
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: langfuse
+      POSTGRES_PASSWORD: langfuse
+      POSTGRES_DB: langfuse
+    volumes:
+      - ./langfuse:/var/lib/postgresql/data
+
+  labelstudio:
+    image: heartexlabs/label-studio:latest
+    ports:
+      - "8080:8080"
+
+  mcp:
+    build:
+      context: ./mcp
+    ports:
+      - "9000:9000"
+    depends_on:
+      - llm

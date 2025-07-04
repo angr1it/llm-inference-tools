@@ -1,0 +1,8 @@
+FROM nvidia/cuda:12.4.0-cudnn-runtime-ubuntu22.04
+RUN apt-get update && apt-get install -y git python3-pip
+RUN pip install --upgrade pip && \
+    pip install llama-cpp-python[server] onnxruntime-gpu optimum[onnxruntime] \
+               accelerate peft transformers fastapi uvicorn jupyterlab
+WORKDIR /app
+COPY llm-server ./llm-server
+CMD ["uvicorn", "llm-server.main:app", "--host", "0.0.0.0", "--port", "8000"]

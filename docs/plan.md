@@ -1,23 +1,25 @@
-В одном open-source окружении можно собрать полный стек для работы с **Qwen 3 8B Reasoning**, включая LoRA-файнтюнинг, GPU-контейнер, чат-UI, REST-API и оба рантайма — **llama.cpp** (GGUF) и **ONNX Runtime**. Ниже приведены лучшие репозитории, приёмы оптимизации и пример Docker-композиции.
+# Deployment Plan
 
-## 1 · Где взять модель
+This document outlines how to prepare a working stack for **Qwen 3 8B Reasoning**. The goal is to run the model in either `llama.cpp` or `ONNX Runtime`, fine-tune adapters with LoRA, expose a chat UI and REST API, and collect logs for RLHF.
 
-| Что                     | Репозиторий/пакет                                                                                                                                                                                       | Комментарий                                     |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
-| **Qwen 3 8B Reasoning** | `QwenLM/Qwen3` на GitHub ([github.com](https://github.com/QwenLM/Qwen3?utm_source=chatgpt.com)) / `Qwen/Qwen3-8B` на HF ([huggingface.co](https://huggingface.co/Qwen/Qwen3-8B?utm_source=chatgpt.com)) | FP16, GPTQ/AWQ и готовые GGUF-кванты (4-8 bit). |
-| **GGUF конвертер**      | `convert.py` в llama.cpp ([github.com](https://github.com/abetlen/llama-cpp-python/blob/main/llama_cpp/server/__main__.py?utm_source=chatgpt.com))                                                      | Генерирует GGUF из HF-модели.                   |
-| **ONNX чек-пойнт**      | экспорт через `optimum.onnxruntime` ([onnxruntime.ai](https://onnxruntime.ai/docs/genai/?utm_source=chatgpt.com))                                                                                       | Дает FP16 → INT8/INT4.                          |
+## 1 · Where to get the model
 
-## 2 · LoRA-файнтюнинг без GPU
+| Item | Repository/Package | Notes |
+| ---- | ------------------ | ----- |
+| **Qwen 3 8B Reasoning** | [QwenLM/Qwen3](https://github.com/QwenLM/Qwen3) / [Qwen/Qwen3-8B](https://huggingface.co/Qwen/Qwen3-8B) | FP16 checkpoints, GPTQ/AWQ and ready GGUF quants |
+| **GGUF converter** | [`convert.py` from llama.cpp](https://github.com/abetlen/llama-cpp-python/blob/main/llama_cpp/server/__main__.py) | Creates GGUF from a HF model |
+| **ONNX checkpoint** | Export via `optimum.onnxruntime` | FP16 → INT8/INT4 |
 
-| Способ                          | Репозиторий                                                                                                                                                    | Детали                                                    |
-| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
-| **LoRA на llama.cpp (CPU/GPU)** | встроенная утилита `finetune` ([reddit.com](https://www.reddit.com/r/LocalLLaMA/comments/16utjm0/finetune_lora_on_cpu_using_llamacpp/?utm_source=chatgpt.com)) | Генерирует адаптер `*.gguf`, применяемый флагом `--lora`. |
-| **PEFT/LoRA для ONNX**          | `onnxruntime-genai` + PEFT                                                                                                                                     | Экспортируем LoRA-веса в ONNX, затем квантуем.            |
+## 2 · LoRA fine-tuning without a GPU
 
-## 3 · GPU-контейнер разработки
+| Approach | Repository | Details |
+| -------- | ---------- | ------- |
+| **LoRA with llama.cpp** | built-in `finetune` ([discussion](https://www.reddit.com/r/LocalLLaMA/comments/16utjm0/finetune_lora_on_cpu_using_llamacpp/)) | Produces `*.gguf` adapter to be used with `--lora` |
+| **PEFT/LoRA for ONNX** | `onnxruntime-genai` + PEFT | Export LoRA weights to ONNX and then quantize |
 
-*Базовая идея — один Dockerfile + compose:*
+## 3 · GPU development container
+
+A simple approach is to use one Dockerfile with compose:
 
 ```dockerfile
 FROM nvidia/cuda:12.4.0-cudnn-runtime-ubuntu22.04
@@ -25,13 +27,13 @@ RUN apt-get update && apt-get install -y git python3-dev python3-pip
 RUN pip install --upgrade pip && \
     pip install llama-cpp-python[server] onnxruntime-gpu optimum[onnxruntime] \
                accelerate peft transformers fastapi uvicorn
-# Скачаем модель при билде (по желанию):
+# Optionally download the model during build
 RUN git clone https://huggingface.co/Qwen/Qwen3-8B /models/qwen3-8b
 WORKDIR /app
 CMD ["uvicorn", "llama_cpp.server:app", "--port", "8000"]
 ```
 
-*Пример compose-файла добавит UI (Open-WebUI) и пробросит GPU:*
+Example compose snippet to add a UI (Open WebUI) and expose the GPU:
 
 ```yaml
 services:
@@ -49,34 +51,34 @@ services:
       - OPENAI_API_BASE_URL=http://llm:8000/v1
 ```
 
-**Источники** — готовый GPU-образ для llama.cpp ([github.com](https://github.com/fboulnois/llama-cpp-docker?utm_source=chatgpt.com)) и обсуждение CUDA-Docker в llama-cpp-python ([github.com](https://github.com/abetlen/llama-cpp-python/discussions/1609?utm_source=chatgpt.com)).
+Useful references: [llama-cpp-docker](https://github.com/fboulnois/llama-cpp-docker) and the CUDA-Docker discussion in [llama-cpp-python](https://github.com/abetlen/llama-cpp-python/discussions/1609).
 
-## 4 · Чат-интерфейс
+## 4 · Chat interface
 
-- Если нужен лёгкий standalone UI → **Open WebUI** ([github.com](https://github.com/open-webui/open-webui?utm_source=chatgpt.com), [docs.openwebui.com](https://docs.openwebui.com/?utm_source=chatgpt.com)).
-- Минималистичный UI, написанный специально под llama.cpp → **MaggotHATE/Llama\_chat** ([github.com](https://github.com/MaggotHATE/Llama_chat?utm_source=chatgpt.com)) или форк Chatbot-UI ([github.com](https://github.com/yportne13/chatbot-ui-llama.cpp?utm_source=chatgpt.com)).
-- Любой из UI подключается к back-энд-API совместимому с OpenAI.
+- Lightweight standalone UI → [Open WebUI](https://github.com/open-webui/open-webui)
+- Minimal UI tailored for llama.cpp → [MaggotHATE/Llama_chat](https://github.com/MaggotHATE/Llama_chat) or a fork of Chatbot-UI
+- Any of these UIs connect to an OpenAI-compatible backend API
 
-## 5 · API-слой
+## 5 · API layer
 
-| Рантайм          | Быстрый сервер                                                                                                                                                                                          |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **llama.cpp**    | `llama-cpp-python` уже содержит FastAPI-сервер (`python -m llama_cpp.server`) ([github.com](https://github.com/abetlen/llama-cpp-python/blob/main/llama_cpp/server/__main__.py?utm_source=chatgpt.com)) |
-| **ONNX Runtime** | `onnxruntime-genai generate()` — генеративный API с KV-кешем ([onnxruntime.ai](https://onnxruntime.ai/docs/genai/?utm_source=chatgpt.com))                                                              |
+| Runtime | Quick server |
+| ------- | ------------ |
+| **llama.cpp** | `llama-cpp-python` already includes a FastAPI server (`python -m llama_cpp.server`) |
+| **ONNX Runtime** | `onnxruntime-genai generate()` provides a generation API with KV cache |
 
-Обе реализации поддерживают SSE-поток (чат-стрим) и заголовок `Authorization: Bearer`.
+Both implementations support SSE (streaming chat) and the `Authorization: Bearer` header.
 
-## 6 · Адаптеры и оптимизация
+## 6 · Adapters and optimisation
 
 ### llama.cpp
 
 ```bash
-# GGUF-квант + полный offload
+# GGUF quant + full offload
 ./llama-quantize qwen3-8b.gguf qwen3-8b.Q4_K_M.gguf q4_k_m
-./llama-cli -m qwen3-8b.Q4_K_M.gguf -n_gpu_layers 99 -p "Привет!"
+./llama-cli -m qwen3-8b.Q4_K_M.gguf -n_gpu_layers 99 -p "Hello!"
 ```
 
-*Q4\_K\_M* укладывается ≈ 6 GB VRAM и даёт 80-100 tok/s на RTX 4090 ([github.com](https://github.com/abetlen/llama-cpp-python/blob/main/llama_cpp/server/__main__.py?utm_source=chatgpt.com)).
+`Q4_K_M` fits into ~6 GB of VRAM and yields 80-100 tok/s on an RTX 4090.
 
 ### ONNX
 
@@ -84,33 +86,31 @@ services:
 from optimum.onnxruntime import ORTModelForCausalLM
 m = ORTModelForCausalLM.from_pretrained("Qwen/Qwen3-8B", export=True)
 m.save_pretrained("onnx/qwen3")
-# динамическая INT8
 from onnxruntime.quantization import quantize_dynamic
-quantize_dynamic("onnx/qwen3/model.onnx","onnx/qwen3/int8.onnx")
+quantize_dynamic("onnx/qwen3/model.onnx", "onnx/qwen3/int8.onnx")
 ```
 
-INT8 снижает RAM в 4× и ускоряет inference ([onnxruntime.ai](https://onnxruntime.ai/docs/genai/?utm_source=chatgpt.com)).
+INT8 reduces RAM usage by 4× and speeds up inference.
 
 ---
 
-### Готовое «меню» репозиториев
+### Helpful repositories
 
-| Задача         | Репозиторий                                                                                                                                               |
-| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Модель и веса  | QwenLM/Qwen3 ([github.com](https://github.com/QwenLM/Qwen3?utm_source=chatgpt.com))                                                                       |
-| GGUF-конвертер | llama.cpp `convert.py` ([github.com](https://github.com/abetlen/llama-cpp-python/blob/main/llama_cpp/server/__main__.py?utm_source=chatgpt.com))          |
-| LoRA (CPU)     | llama.cpp finetune guide ([reddit.com](https://www.reddit.com/r/LocalLLaMA/comments/16utjm0/finetune_lora_on_cpu_using_llamacpp/?utm_source=chatgpt.com)) |
-| GPU Dockerfile | fboulnois/llama-cpp-docker ([github.com](https://github.com/fboulnois/llama-cpp-docker?utm_source=chatgpt.com))                                           |
-| Чат-UI         | open-webui/open-webui ([github.com](https://github.com/open-webui/open-webui?utm_source=chatgpt.com))                                                     |
-| ONNX Gen-AI    | onnxruntime-genai ([onnxruntime.ai](https://onnxruntime.ai/docs/genai/?utm_source=chatgpt.com))                                                           |
-| FastAPI server | llama-cpp-python ([github.com](https://github.com/abetlen/llama-cpp-python/blob/main/llama_cpp/server/__main__.py?utm_source=chatgpt.com))                |
+| Task | Repository |
+| ---- | ---------- |
+| Model and weights | [QwenLM/Qwen3](https://github.com/QwenLM/Qwen3) |
+| GGUF converter | [llama.cpp `convert.py`](https://github.com/abetlen/llama-cpp-python/blob/main/llama_cpp/server/__main__.py) |
+| LoRA (CPU) | [llama.cpp finetune guide](https://www.reddit.com/r/LocalLLaMA/comments/16utjm0/finetune_lora_on_cpu_using_llamacpp/) |
+| GPU Dockerfile | [fboulnois/llama-cpp-docker](https://github.com/fboulnois/llama-cpp-docker) |
+| Chat UI | [open-webui/open-webui](https://github.com/open-webui/open-webui) |
+| ONNX Gen-AI | [onnxruntime-genai](https://onnxruntime.ai/docs/genai/) |
+| FastAPI server | [llama-cpp-python](https://github.com/abetlen/llama-cpp-python/blob/main/llama_cpp/server/__main__.py) |
 
-## 7 · Что дальше
+## 7 · Next steps
 
-1. **Соберите контейнер**, запустив `docker compose up -d`. При использовании старых версий Docker добавьте флаг `--gpus all`.
-2. **Разместите модель** (GGUF или ONNX‑INT8) в томе `/models` и, при необходимости, укажите путь к ней переменной `MODEL_PATH`.
-3. **Откройте UI** по адресу `http://localhost:3000` (Open WebUI) и сразу начните чат или задайте ключ API, если требуется.
-4. **Подключайте/меняйте LoRA‑адаптеры**: передайте флаги `--lora adapter1.gguf,adapter2.gguf` или переменную окружения `LORA_PATHS`, затем перезапустите сервис `llm`.
-5. **Следите за ресурсами**: используйте `docker stats`/`nvidia-smi` — если VRAM > 80 %, уменьшайте `n_gpu_layers` или переходите на более жёсткую квантизацию.
-6. **Обновляйте модель** заменой файлов в `/models` и командой `docker compose restart llm`; UI автоматически переподключится.
-
+1. **Build the container** with `docker compose up -d`. Older Docker versions may require `--gpus all`.
+2. **Place the model** (GGUF or ONNX-INT8) in `/models` and set `MODEL_PATH` if needed.
+3. **Open the UI** at `http://localhost:3000` and start chatting or set an API key if required.
+4. **Attach or switch LoRA adapters** via `--lora adapter1.gguf,adapter2.gguf` or the `LORA_PATHS` variable and restart the `llm` service.
+5. **Watch your resources** using `docker stats` or `nvidia-smi`. If VRAM > 80%, reduce `n_gpu_layers` or choose a smaller quantisation.
+6. **Update the model** by replacing files in `/models` and running `docker compose restart llm`; the UI will reconnect automatically.
